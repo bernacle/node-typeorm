@@ -1,5 +1,5 @@
-// import AppError from '../errors/AppError';
 import { getCustomRepository, getRepository } from 'typeorm';
+import AppError from '../errors/AppError';
 import TransactionRepository from '../repositories/TransactionsRepository';
 import Category from '../models/Category';
 
@@ -21,28 +21,32 @@ class CreateTransactionService {
   }: Request): Promise<Transaction> {
     const transactionRepository = getCustomRepository(TransactionRepository);
     const categoryRepository = getRepository(Category);
-    let category_id = '';
 
-    const categoryResponse = await categoryRepository.findOne({
+    const { total } = await transactionRepository.getBalance();
+
+    if (type === 'outcome' && total < value) {
+      throw new AppError('Value to deduct is bigger than the total');
+    }
+
+    let transactionCategory = await categoryRepository.findOne({
       where: {
         title: category,
       },
     });
 
-    if (categoryResponse) {
-      category_id = categoryResponse.id;
-    } else {
-      const { id } = await categoryRepository.save(
-        categoryRepository.create({ title: category }),
-      );
-      category_id = id;
+    if (!transactionCategory) {
+      transactionCategory = categoryRepository.create({
+        title: category,
+      });
+
+      await categoryRepository.save(transactionCategory);
     }
 
     const transaction = transactionRepository.create({
       title,
       value,
       type,
-      category_id,
+      category: transactionCategory,
     });
 
     await transactionRepository.save(transaction);
